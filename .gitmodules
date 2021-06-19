@@ -1,0 +1,9 @@
+[submodule "Lib/DxfLib"]
+	path = Lib/DxfLib
+	url = https://github.com/madmaxoft/DxfLib.git
+[submodule "Lib/TestHelpers"]
+	path = Lib/TestHelpers
+	url = https://github.com/madmaxoft/TestHelpers.git
+[submodule "Lib/Fmt"]
+	path = Lib/Fmt
+	url = https://github.com/madmaxoft/fmt.git
