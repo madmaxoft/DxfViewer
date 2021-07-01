@@ -131,6 +131,8 @@ add_definitions(-DQT_MESSAGELOGCONTEXT)
 
 set (SOURCES
 	Src/Main.cpp
+	Src/Ui/CadView.cpp
+	Src/Ui/DxfWindow.cpp
 )
 
 
@@ -138,6 +140,8 @@ set (SOURCES
 
 
 set (HEADERS
+	Src/Ui/CadView.hpp
+	Src/Ui/DxfWindow.hpp
 )
 
 
@@ -145,7 +149,7 @@ set (HEADERS
 
 
 set (UI
-	# TODO: Add any *.ui files here
+	Src/Ui/DxfWindow.ui
 )
 
 set (RESOURCES

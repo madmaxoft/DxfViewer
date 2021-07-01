@@ -2,13 +2,27 @@
 
 // Implements the main entrypoint to the app
 
+#include <memory>
+
 #include <QApplication>
 #include <QTranslator>
 #include <QLocale>
 #include <QDebug>
 #include <QMessageBox>
 
-// #include "DxfWindow.h"
+#include "Ui/DxfWindow.hpp"
+
+
+
+
+
+// fwd:
+namespace Dxf
+{
+	class Drawing;
+}
+
+Q_DECLARE_METATYPE(std::shared_ptr<Dxf::Drawing>);
 
 
 
@@ -69,14 +83,20 @@ int main(int argc, char *argv[])
 {
 	QApplication app(argc, argv);
 
+	qRegisterMetaType<std::shared_ptr<Dxf::Drawing>>();
+
 	try
 	{
 		// Initialize translations:
 		initTranslations(app);
 
 		// Show the UI:
-		// DxfWindow mainWindow();
-		// mainWindow.showMaximized();
+		DxfWindow mainWindow;
+		if (argc > 1)
+		{
+			mainWindow.openFile(argv[1]);
+		}
+		mainWindow.showMaximized();
 
 		// Run the app:
 		auto res = app.exec();
