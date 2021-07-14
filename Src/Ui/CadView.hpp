@@ -32,7 +32,7 @@ public:
 	void zoomTo(QRectF aRect);
 
 
-signals:
+Q_SIGNALS:
 
 	/** Emitted when a mouse is moved within the space of this widget (and mouse-tracking is on). */
 	void mouseMoved(QPointF aSceneMousePos);

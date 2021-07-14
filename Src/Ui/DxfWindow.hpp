@@ -43,7 +43,7 @@ public:
 	~DxfWindow();
 
 
-public slots:
+public Q_SLOTS:
 
 	/** Lets the user choose a file, then attempts to open it. */
 	void selectAndOpenFile();
@@ -58,7 +58,7 @@ public slots:
 	void zoomAll();
 
 
-protected slots:
+protected Q_SLOTS:
 
 	/** Replaces the currently displayed drawing with the specified one.
 	Refreshes the drawing, the layer list and clears the selection / property view.

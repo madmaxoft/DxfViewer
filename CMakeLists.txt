@@ -125,6 +125,9 @@ add_definitions(-DQT_DEPRECATED_WARNINGS)
 # Enable message log context information even in Release builds:
 add_definitions(-DQT_MESSAGELOGCONTEXT)
 
+# Disable Qt defining symbols like "slots", "emit", "signals" etc.
+add_definitions(-DQT_NO_KEYWORDS)
+
 
 
 

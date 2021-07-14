@@ -63,7 +63,7 @@ void CadView::wheelEvent(QWheelEvent * aEvent)
 	dy += mousePos.y() * (1 - factor);
 	setTransform(QTransform(scale, 0, 0, scale, dx, dy));
 	aEvent->setAccepted(true);
-	emit mouseMoved(mapToScene(mousePos.toPoint()));
+	Q_EMIT mouseMoved(mapToScene(mousePos.toPoint()));
 }
 
 
@@ -91,7 +91,7 @@ void CadView::mouseMoveEvent(QMouseEvent * aEvent)
 		setTransform(transform().translate(dx, dy));
 		mMousePanLastPos = aEvent->pos();
 	}
-	emit mouseMoved(mapToScene(aEvent->pos()));
+	Q_EMIT mouseMoved(mapToScene(aEvent->pos()));
 }
 
 
