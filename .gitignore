@@ -1,3 +1,6 @@
+# Sample DXF files stored locally:
+DXFs/
+
 # QtCreator user-config files:
 CMakeLists.txt.user.*
 CMakeLists.txt.user
