@@ -61,9 +61,10 @@ public Q_SLOTS:
 protected Q_SLOTS:
 
 	/** Replaces the currently displayed drawing with the specified one.
+	Updates the current filename.
 	Refreshes the drawing, the layer list and clears the selection / property view.
 	Used when loading the data from a file. Receives the data from a background thread. */
-	void setCurrentDrawing(std::shared_ptr<Dxf::Drawing> aNewDrawing);
+	void setCurrentDrawing(const QString & aFileName, std::shared_ptr<Dxf::Drawing> aNewDrawing);
 
 	/** Displays an error message about being unable to load the data from the specified file.
 	Called from the background parsing thread. */
@@ -78,6 +79,9 @@ private:
 	/** The statusbar labels for the current mouse position. */
 	QLabel * mLblPosX;
 	QLabel * mLblPosY;
+
+	/** The name of the currently loaded file. */
+	QString mCurrentFileName;
 
 	/** The currently displayed drawing. */
 	std::shared_ptr<Dxf::Drawing> mCurrentDrawing;
