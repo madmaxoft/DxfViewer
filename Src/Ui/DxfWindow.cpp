@@ -1,13 +1,28 @@
 #include "DxfWindow.hpp"
+
 #include <algorithm>
+#include <cmath>
+
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QThreadPool>
 #include <QLabel>
 #include <QDebug>
+#include <QGraphicsPathItem>
+
 #include "ui_DxfWindow.h"
 #include "DxfDrawing.hpp"
 #include "DxfParser.hpp"
+
+
+
+
+
+/** Converts angular degrees to radians. */
+static double constexpr degToRad(double aDegrees)
+{
+	return (90 - aDegrees) * 3.141592 / 180;
+}
 
 
 
@@ -69,6 +84,65 @@ static QRectF rectFromExtent(const Dxf::Extent & aExtent)
 	QPointF bottomRight(aExtent.maxCoord().mX, aExtent.maxCoord().mY);
 	return QRectF(topLeft, bottomRight);
 }
+
+
+
+
+
+/** Draws an arc in a QGraphicsView. */
+class ArcItem: public QGraphicsPathItem
+{
+
+	using Super = QGraphicsPathItem;
+
+
+public:
+
+	/** Constructs a QPainterPath containing the arc of the specified parameters. */
+	static QPainterPath arcToPath(
+		qreal aCenterX,
+		qreal aCenterY,
+		qreal aRadius,
+		qreal aStartAngleDeg,
+		qreal aEndAngleDeg
+	)
+	{
+		if (aStartAngleDeg > aEndAngleDeg)
+		{
+			aEndAngleDeg += 360;
+		}
+
+		QPainterPath res;
+		QRectF rect(aCenterX - aRadius, aCenterY - aRadius, 2 * aRadius, 2 * aRadius);
+		res.arcMoveTo(rect, aStartAngleDeg);
+		res.arcTo(rect, aStartAngleDeg, aEndAngleDeg - aStartAngleDeg);
+
+		// DEBUG:
+		auto x1 = aCenterX + std::sin(degToRad(aStartAngleDeg)) * aRadius;
+		auto y1 = aCenterY - std::cos(degToRad(aStartAngleDeg)) * aRadius;
+		auto x2 = aCenterX + std::sin(degToRad(aEndAngleDeg))   * aRadius;
+		auto y2 = aCenterY - std::cos(degToRad(aEndAngleDeg))   * aRadius;
+		res.moveTo(x1, y1);
+		res.lineTo(x2, y2);
+
+		return res;
+	}
+
+
+	ArcItem(
+		qreal aCenterX,
+		qreal aCenterY,
+		qreal aRadius,
+		qreal aStartAngleDeg,
+		qreal aEndAngleDeg,
+		QPen && aPen
+	):
+		Super(arcToPath(aCenterX, aCenterY, aRadius, aStartAngleDeg, aEndAngleDeg))
+	{
+		setPen(std::move(aPen));
+		setBrush(QBrush(Qt::NoBrush));
+	}
+};
 
 
 
@@ -217,7 +291,9 @@ void DxfWindow::setCurrentDrawing(std::shared_ptr<Dxf::Drawing> aNewDrawing)
 				case Dxf::otLine:
 				{
 					auto line = reinterpret_cast<Dxf::Line *>(obj.get());
-					mScene.addLine(line->mPos.mX, line->mPos.mY, line->mPos2.mX, line->mPos2.mY, QPen(color));
+					QPen pen(color);
+					pen.setWidth(0);
+					mScene.addLine(line->mPos.mX, -line->mPos.mY, line->mPos2.mX, -line->mPos2.mY, pen);
 					break;
 				}
 				case Dxf::otPolyline:
@@ -225,10 +301,34 @@ void DxfWindow::setCurrentDrawing(std::shared_ptr<Dxf::Drawing> aNewDrawing)
 					auto polyline = reinterpret_cast<Dxf::Polyline *>(obj.get());
 					auto num = polyline->mVertices.size();
 					auto & vertex = polyline->mVertices;
+					QPen pen(color);
+					pen.setWidth(0);
 					for (size_t i = 1; i < num; ++i)
 					{
-						mScene.addLine(vertex[i - 1].mPos.mX, vertex[i - 1].mPos.mY, vertex[i].mPos.mX, vertex[i].mPos.mY, QPen(color));
+						mScene.addLine(vertex[i - 1].mPos.mX, -vertex[i - 1].mPos.mY, vertex[i].mPos.mX, -vertex[i].mPos.mY, pen);
 					}
+					break;
+				}
+				case Dxf::otCircle:
+				{
+					auto circle = reinterpret_cast<Dxf::Circle *>(obj.get());
+					auto r = circle->mRadius;
+					QPen pen(color);
+					pen.setWidth(0);
+					mScene.addEllipse(circle->mPos.mX - r, -circle->mPos.mY + r, 2 * r, 2 * r, pen);
+					break;
+				}
+				case Dxf::otArc:
+				{
+					auto arc = reinterpret_cast<Dxf::Arc *>(obj.get());
+					QPen pen("Red");
+					pen.setWidth(0);
+					mScene.addItem(new ArcItem(arc->mPos.mX, -arc->mPos.mY, arc->mRadius, arc->mStartAngle, arc->mEndAngle, std::move(pen)));
+					break;
+				}
+				default:
+				{
+					qDebug() << "Unhandled DXF ObjectType: " << obj->mObjectType;
 					break;
 				}
 				// TODO: More object types
@@ -244,5 +344,5 @@ void DxfWindow::setCurrentDrawing(std::shared_ptr<Dxf::Drawing> aNewDrawing)
 
 void DxfWindow::openFileFailed(const QString & aFileName, const QString & aMessage)
 {
-	QMessageBox::warning(this, tr("Failed to open file"), tr("Failed to open file %1\n%2").arg(aFileName).arg(aMessage));
+	QMessageBox::warning(this, tr("Failed to open file"), tr("Failed to open file %1\n%2").arg(aFileName, aMessage));
 }
