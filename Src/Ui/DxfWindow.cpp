@@ -1,13 +1,28 @@
 #include "DxfWindow.hpp"
+
 #include <algorithm>
+#include <cmath>
+
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QThreadPool>
 #include <QLabel>
 #include <QDebug>
+#include <QGraphicsPathItem>
+
 #include "ui_DxfWindow.h"
 #include "DxfDrawing.hpp"
 #include "DxfParser.hpp"
+
+
+
+
+
+/** Converts angular degrees to radians. */
+static double constexpr degToRad(double aDegrees)
+{
+	return (90 - aDegrees) * 3.141592 / 180;
+}
 
 
 
@@ -74,6 +89,63 @@ static QRectF rectFromExtent(const Dxf::Extent & aExtent)
 
 
 
+/** Draws an arc in a QGraphicsView. */
+class ArcItem: public QGraphicsPathItem
+{
+
+	using Super = QGraphicsPathItem;
+
+
+public:
+
+	/** Constructs a QPainterPath containing the arc of the specified parameters. */
+	static QPainterPath arcToPath(
+		qreal aCenterX,
+		qreal aCenterY,
+		qreal aRadius,
+		qreal aStartAngleDeg,
+		qreal aEndAngleDeg
+	)
+	{
+		QPainterPath res;
+		QRectF rect(aCenterX - aRadius, aCenterY - aRadius, 2 * aRadius, 2 * aRadius);
+		res.arcMoveTo(rect, aStartAngleDeg);
+		auto endAngleDeg = (aEndAngleDeg > aStartAngleDeg) ? aEndAngleDeg : (aEndAngleDeg + 360);
+		res.arcTo(rect, aStartAngleDeg, endAngleDeg - aStartAngleDeg);
+
+		/*
+		// DEBUG:
+		auto x1 = aCenterX + std::sin(degToRad(aStartAngleDeg)) * aRadius;
+		auto y1 = aCenterY - std::cos(degToRad(aStartAngleDeg)) * aRadius;
+		auto x2 = aCenterX + std::sin(degToRad(aEndAngleDeg))   * aRadius;
+		auto y2 = aCenterY - std::cos(degToRad(aEndAngleDeg))   * aRadius;
+		res.moveTo(x1, y1);
+		res.lineTo(x2, y2);
+		*/
+
+		return res;
+	}
+
+
+	ArcItem(
+		qreal aCenterX,
+		qreal aCenterY,
+		qreal aRadius,
+		qreal aStartAngleDeg,
+		qreal aEndAngleDeg,
+		QPen && aPen
+	):
+		Super(arcToPath(aCenterX, aCenterY, aRadius, aStartAngleDeg, aEndAngleDeg))
+	{
+		setPen(std::move(aPen));
+		setBrush(QBrush(Qt::NoBrush));
+	}
+};
+
+
+
+
+
 ////////////////////////////////////////////////////////////////////////////////
 // DxfWindow:
 
@@ -90,10 +162,11 @@ DxfWindow::DxfWindow(QWidget * aParent):
 	mUI->statusBar->addWidget(mLblPosY);
 
 	// Connect the signals / slots:
-	connect(mUI->mActExit,     &QAction::triggered,  this, &DxfWindow::close);
-	connect(mUI->mActFileOpen, &QAction::triggered,  this, &DxfWindow::selectAndOpenFile);
-	connect(mUI->mActZoomAll,  &QAction::triggered,  this, &DxfWindow::zoomAll);
-	connect(mUI->cvDrawing,    &CadView::mouseMoved, this, &DxfWindow::updatePosLabels);
+	connect(mUI->mActExit,       &QAction::triggered,  this, &DxfWindow::close);
+	connect(mUI->mActFileOpen,   &QAction::triggered,  this, &DxfWindow::selectAndOpenFile);
+	connect(mUI->mActFileReload, &QAction::triggered,  this, [this](){ openFile(mCurrentFileName); });
+	connect(mUI->mActZoomAll,    &QAction::triggered,  this, &DxfWindow::zoomAll);
+	connect(mUI->cvDrawing,      &CadView::mouseMoved, this, &DxfWindow::updatePosLabels);
 }
 
 
@@ -154,7 +227,7 @@ void DxfWindow::openFile(const QString & aFileName)
 			{
 				layer->updateExtent();
 			}
-			QMetaObject::invokeMethod(this, "setCurrentDrawing", Q_ARG(std::shared_ptr<Dxf::Drawing>, drawing));
+			QMetaObject::invokeMethod(this, "setCurrentDrawing", Q_ARG(QString, aFileName), Q_ARG(std::shared_ptr<Dxf::Drawing>, drawing));
 		}
 		catch (const Dxf::Parser::Error & exc)
 		{
@@ -201,8 +274,9 @@ void DxfWindow::zoomAll()
 
 
 
-void DxfWindow::setCurrentDrawing(std::shared_ptr<Dxf::Drawing> aNewDrawing)
+void DxfWindow::setCurrentDrawing(const QString & aFileName, std::shared_ptr<Dxf::Drawing> aNewDrawing)
 {
+	mCurrentFileName = aFileName;
 	std::swap(mCurrentDrawing, aNewDrawing);
 	mScene.clear();
 	Dxf::Extent extent;
@@ -217,7 +291,7 @@ void DxfWindow::setCurrentDrawing(std::shared_ptr<Dxf::Drawing> aNewDrawing)
 				case Dxf::otLine:
 				{
 					auto line = reinterpret_cast<Dxf::Line *>(obj.get());
-					mScene.addLine(line->mPos.mX, line->mPos.mY, line->mPos2.mX, line->mPos2.mY, QPen(color));
+					mScene.addLine(line->mPos.mX, -line->mPos.mY, line->mPos2.mX, -line->mPos2.mY, QPen(color));
 					break;
 				}
 				case Dxf::otPolyline:
@@ -227,8 +301,26 @@ void DxfWindow::setCurrentDrawing(std::shared_ptr<Dxf::Drawing> aNewDrawing)
 					auto & vertex = polyline->mVertices;
 					for (size_t i = 1; i < num; ++i)
 					{
-						mScene.addLine(vertex[i - 1].mPos.mX, vertex[i - 1].mPos.mY, vertex[i].mPos.mX, vertex[i].mPos.mY, QPen(color));
+						mScene.addLine(vertex[i - 1].mPos.mX, -vertex[i - 1].mPos.mY, vertex[i].mPos.mX, vertex[i].mPos.mY, QPen(color));
 					}
+					break;
+				}
+				case Dxf::otCircle:
+				{
+					auto circle = reinterpret_cast<Dxf::Circle *>(obj.get());
+					auto r = circle->mRadius;
+					mScene.addEllipse(circle->mPos.mX - r, -circle->mPos.mY - r, 2 * r, 2 * r, QPen(color));
+					break;
+				}
+				case Dxf::otArc:
+				{
+					auto arc = reinterpret_cast<Dxf::Arc *>(obj.get());
+					mScene.addItem(new ArcItem(arc->mPos.mX, -arc->mPos.mY, arc->mRadius, arc->mStartAngle, arc->mEndAngle, QPen(color)));
+					break;
+				}
+				default:
+				{
+					qDebug() << "Unhandled DXF ObjectType: " << obj->mObjectType;
 					break;
 				}
 				// TODO: More object types
@@ -244,5 +336,5 @@ void DxfWindow::setCurrentDrawing(std::shared_ptr<Dxf::Drawing> aNewDrawing)
 
 void DxfWindow::openFileFailed(const QString & aFileName, const QString & aMessage)
 {
-	QMessageBox::warning(this, tr("Failed to open file"), tr("Failed to open file %1\n%2").arg(aFileName).arg(aMessage));
+	QMessageBox::warning(this, tr("Failed to open file"), tr("Failed to open file %1\n%2").arg(aFileName, aMessage));
 }
