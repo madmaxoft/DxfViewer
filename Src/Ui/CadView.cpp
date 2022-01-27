@@ -31,18 +31,18 @@ CadView::CadView(QWidget * aParentWidget):
 
 void CadView::zoomTo(QRectF aRect)
 {
+	static constexpr int EDGE = 2;  // How many pixels to leave free at each edge of the view
 	if (!aRect.isValid())
 	{
 		qDebug() << "Cannot zoomTo() an invalid rect";
 		return;
 	}
 	QTransform transform;
-	auto factor = viewport()->width() / aRect.width();
-	auto factor2 = viewport()->height() / aRect.height();
+	auto factor = (viewport()->width() - 2 * EDGE) / aRect.width();
+	auto factor2 = (viewport()->height() - 2 * EDGE) / aRect.height();
 	factor = std::min(factor, factor2);
 	transform.scale(factor, factor);
-	auto center = -aRect.topLeft();  // TODO: Center the image
-	transform.translate(center.x(), center.y());
+	transform.translate(EDGE / factor - aRect.left(), EDGE / factor + aRect.bottom());  // TODO: This only puts the whole image into the viewport, but doesn't center it
 	setTransform(transform);
 }
 
